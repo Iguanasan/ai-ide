@@ -7,11 +7,11 @@ function createWindow () {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: true,
+      nodeIntegration: false
     }
   });
-  win.loadFile('index.html');
+  win.loadFile('dist/index.html'); // Load bundled HTML
 }
 
 app.whenReady().then(createWindow);
