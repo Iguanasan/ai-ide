@@ -1,43 +1,160 @@
+/* src/index.css */
+/* Tailwind layers stay first */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .bg-blue-600 { background-color: #2563eb; }
-  .text-white { color: #ffffff; }
-  .p-4 { padding: 1rem; }
-  .text-center { text-align: center; }
-  .font-bold { font-weight: 700; }
-  .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
-  .z-10 { z-index: 10; }
-  .bg-gray-200 { background-color: #e5e7eb; }
-  .h-full { height: 100%; }
-  .w-0 { width: 0px; }
-  .overflow-hidden { overflow: hidden; }
-  .absolute { position: absolute; }
-  .right-0 { right: 0px; }
-  .top-0 { top: 0px; }
-  .bottom-0 { bottom: 0px; }
-  .w-2 { width: 0.5rem; }
-  .cursor-col-resize { cursor: col-resize; }
-  .mb-4 { margin-bottom: 1rem; }
-  .rounded { border-radius: 0.25rem; }
-  .hover\:bg-gray-200:hover { background-color: #e5e7eb; }
-  .h-5 { height: 1.25rem; }
-  .w-5 { width: 1.25rem; }
-  .text-gray-600 { color: #4b5563; }
-  .flex-1 { flex: 1 1 0%; }
-  .bg-white { background-color: #ffffff; }
+/* ---------- Design Tokens (dark-first) ---------- */
+:root {
+  /* Colors */
+  --primary-color: #007ACC;
+  --neutral-gray: #2D2D2D;
+  --workspace-bg: #1E1E1E;
+  --text-primary: #D4D4D4;
+  --text-secondary: #858585;
+  --border-gray: #3C3C3C;
+  --hover-blue: #005A9E;
+  --success-green: #28A745;
+  --warning-yellow: #FFC107;
+  --error-red: #DC3545;
+
+  /* Sizing / Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  --header-height: 48px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 48px;
+
+  /* Typography */
+  --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+  --font-code: 'Consolas', 'Courier New', monospace;
+  --text-size: 14px;
+  --line: 1.6;
 }
 
-.react-resizable {
-  position: relative;
+/* Light theme override */
+[data-theme="light"] {
+  --neutral-gray: #F0F0F0;
+  --workspace-bg: #FFFFFF;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-gray: #DDDDDD;
+  --hover-blue: #E6F7FF;
 }
-.react-resizable-handle {
-  position: absolute;
-  width: 10px;
-  height: 100%;
-  bottom: 0;
-  right: -5px;
-  cursor: col-resize;
+
+/* ---------- Global base ---------- */
+html, body, #root { height: 100%; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: var(--font-family);
+  font-size: var(--text-size);
+  line-height: var(--line);
+  color: var(--text-primary);
+  background: var(--neutral-gray);
 }
+button, input, textarea, select { line-height: inherit; }
+
+/* ---------- Utility (design-system) classes ---------- */
+.ds-header {
+  position: sticky; top: 0; z-index: 20;
+  height: var(--header-height);
+  display: flex; align-items: center; gap: var(--space-lg);
+  padding: 0 var(--space-lg);
+  background: var(--neutral-gray);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-gray);
+}
+
+.ds-title {
+  font-size: 20px; font-weight: 600; color: var(--text-primary);
+  text-decoration: none;
+}
+
+.ds-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 32px; padding: 0 var(--space-lg);
+  border-radius: 4px; border: none; cursor: pointer;
+  background: var(--primary-color); color: #fff;
+}
+.ds-btn:hover { background: var(--hover-blue); }
+.ds-btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+.ds-btn-secondary {
+  background: transparent; color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+}
+.ds-btn-ghost {
+  background: transparent; color: var(--text-primary);
+  border: 1px solid var(--border-gray);
+}
+
+.ds-shell {
+  /* Content area under the header */
+  height: calc(100% - var(--header-height));
+  display: flex; flex-direction: row;
+}
+
+.ds-sidebar {
+  width: var(--sidebar-width);
+  background: var(--neutral-gray);
+  border-right: 1px solid var(--border-gray);
+  transition: width .2s ease;
+  display: flex; flex-direction: column;
+}
+.ds-sidebar.collapsed { width: var(--sidebar-collapsed-width); }
+
+.ds-sidebar-top {
+  height: 48px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--space-lg);
+  border-bottom: 1px solid var(--border-gray);
+  color: var(--text-secondary);
+  font-weight: 600; font-size: 13px;
+}
+
+.ds-nav {
+  padding: var(--space-sm) 0;
+}
+.ds-navlink {
+  display: flex; align-items: center; gap: var(--space-sm);
+  height: 40px; padding: 0 var(--space-lg);
+  color: var(--text-primary); text-decoration: none;
+}
+.ds-navlink:hover { background: var(--primary-color); color: #fff; }
+.ds-navlink.active { background: var(--primary-color); color: #fff; }
+
+.ds-label { white-space: nowrap; }
+.ds-sidebar.collapsed .ds-label { display: none; }
+
+.ds-workspace {
+  flex: 1 1 auto; overflow: auto;
+  background: var(--workspace-bg); color: var(--text-primary);
+}
+.ds-workspace-inner { max-width: 80rem; margin: 0 auto; padding: var(--space-lg); }
+
+/* Optional panels (placeholders for later enablement) */
+.ds-right-panel {
+  width: 0; /* start disabled; set to e.g. 300px when you enable it */
+  border-left: 1px solid var(--border-gray);
+  background: var(--neutral-gray);
+}
+.ds-bottom-panel {
+  display: none; /* start disabled */
+}
+
+/* Code-like blocks */
+.ds-pre {
+  font-family: var(--font-code); font-size: 13px;
+  background: var(--neutral-gray); color: var(--text-primary);
+  padding: var(--space-md); border-radius: 4px; margin: 0;
+}
+/* split handles: subtle guides */
+.split-handle-v::after { content: ''; display: block; height: 100%; width: 2px; margin: 0 auto; background: var(--border-gray); }
+.split-handle-h::after { content: ''; display: block; width: 100%; height: 2px; margin: 0 auto; background: var(--border-gray); }
+/* resizable dock guides */
+.dock-handle-right::after { content:''; display:block; height:100%; width:2px; margin:0 auto; background: var(--border-gray); }
+.dock-handle-bottom::after{ content:''; display:block; width:100%; height:2px; margin:0 auto; background: var(--border-gray); }
+.dock-handle-corner::after{ content:''; display:block; width:10px; height:10px; background: var(--border-gray); }

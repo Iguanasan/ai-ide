@@ -1,17 +1,22 @@
+// src/App.tsx
 import React from 'react';
-import Header from './components/Header';
-import SidePanel from './components/SidePanel';
-import WorkArea from './components/WorkArea';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import Login from './routes/Login';
+import ProtectedLayout from './routes/ProtectedLayout';
+import ToolHost from './routes/ToolHost';
 
 const App: React.FC = () => {
   return (
-    <div className="flex flex-col h-screen">
-      <Header />
-      <div className="flex flex-1 pt-16">
-        <SidePanel />
-        <WorkArea />
-      </div>
-    </div>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      {/* Protected shell with an <Outlet /> that renders child routes */}
+      <Route element={<ProtectedLayout />}>
+        <Route index element={<Navigate to="/tools/csv-to-json" replace />} />
+        <Route path="tools/:toolId" element={<ToolHost />} />
+        <Route path="*" element={<Navigate to="/tools/csv-to-json" replace />} />
+      </Route>
+    </Routes>
   );
 };
 

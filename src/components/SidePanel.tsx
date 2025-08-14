@@ -1,47 +1,39 @@
-import React, { useState } from 'react';
-     import { ResizableBox } from 'react-resizable';
-     import { ArrowLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+// src/components/SidePanel.tsx
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import { useTools } from '../tools/registry';
 
-     const SidePanel: React.FC = () => {
-       const [isCollapsed, setIsCollapsed] = useState(false);
-       const [width, setWidth] = useState(300);
+const SidePanel: React.FC = () => {
+  const tools = useTools();
+  const [collapsed, setCollapsed] = React.useState(false);
 
-       const handleResize = (_: any, { size }: { size: { width: number; height: number } }) => {
-         setWidth(size.width);
-       };
+  return (
+    <aside className={`ds-sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className="ds-sidebar-top">
+        <span>{collapsed ? '' : 'Tools'}</span>
+        <button
+          className="ds-btn ds-btn-ghost"
+          onClick={() => setCollapsed((v) => !v)}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          style={{ height: 28, padding: '0 10px' }}
+        >
+          {collapsed ? '»' : '«'}
+        </button>
+      </div>
 
-       return (
-         <ResizableBox
-           className={`bg-gray-200 p-4 h-full ${isCollapsed ? 'w-0 p-0 overflow-hidden' : ''}`}
-           width={isCollapsed ? 0 : width}
-           height={Infinity}
-           handle={
-             <div className="absolute right-0 top-0 bottom-0 w-2 bg-gray-400 cursor-col-resize" />
-           }
-           onResize={handleResize}
-           resizeHandles={['e']}
-           minConstraints={[200, Infinity]}
-           maxConstraints={[400, Infinity]}
-         >
-           <div className="h-full">
-             <div className="mb-4">
-               <button
-                 type="button"
-                 onClick={() => setIsCollapsed(!isCollapsed)}
-                 className="p-1 rounded hover:bg-gray-200"
-                 title={isCollapsed ? 'Expand panel' : 'Collapse panel'}
-               >
-                 {isCollapsed ? (
-                   <ArrowRightIcon className="h-5 w-5 text-gray-600" />
-                 ) : (
-                   <ArrowLeftIcon className="h-5 w-5 text-gray-600" />
-                 )}
-               </button>
-             </div>
-             {!isCollapsed && <p>Tool List Placeholder (Resizable)</p>}
-           </div>
-         </ResizableBox>
-       );
-     };
+      <nav className="ds-nav">
+        {tools.map((t) => (
+          <NavLink
+            key={t.id}
+            to={`/tools/${t.id}`}
+            className={({ isActive }) => `ds-navlink ${isActive ? 'active' : ''}`}
+          >
+            <span className="ds-label">{t.name}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </aside>
+  );
+};
 
-     export default SidePanel;
+export default SidePanel;
