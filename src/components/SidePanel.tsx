@@ -6,9 +6,9 @@ const SidePanel: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [width, setWidth] = useState(300);
 
-  const handleResize = (event: any, { size }: { size: { width: number; height: number } }) => {
-    setWidth(size.width);
-  };
+const handleResize = (_: any, { size }: { size: { width: number; height: number } }) => {
+  setWidth(size.width);
+};
 
   return (
     <Resizable
