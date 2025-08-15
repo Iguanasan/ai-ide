@@ -76,7 +76,7 @@ const Login: React.FC = () => {
           )}
         </div>
         <div className="mt-6 text-xs text-gray-500">
-          <Link to="/"><- Back to app</Link>
+          <Link to="/">Back to App</Link>
         </div>
       </div>
     </div>
