@@ -1,4 +1,4 @@
-// src/routes/Login.tsx
+﻿// src/routes/Login.tsx
 import React, { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../providers/AuthProvider';
@@ -76,7 +76,7 @@ const Login: React.FC = () => {
           )}
         </div>
         <div className="mt-6 text-xs text-gray-500">
-          <Link to="/">← Back to app</Link>
+          <Link to="/"><- Back to app</Link>
         </div>
       </div>
     </div>

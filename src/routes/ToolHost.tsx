@@ -1,4 +1,4 @@
-// src/routes/ToolHost.tsx
+﻿// src/routes/ToolHost.tsx
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { getTool } from '../tools/registry';
@@ -42,7 +42,7 @@ const ToolHost: React.FC = () => {
   }, [toolId, meta?.id]);
 
   if (err) return <div className="text-sm text-red-600">{err}</div>;
-  if (!Comp) return <div className="p-2">Loading…</div>;
+  if (!Comp) return <div className="p-2">Loading...</div>;
 
   const content = <Comp key={toolId} />;
 

@@ -1,4 +1,4 @@
-// src/components/SidePanel.tsx
+﻿// src/components/SidePanel.tsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTools } from '../tools/registry';
@@ -17,7 +17,7 @@ const SidePanel: React.FC = () => {
           title={collapsed ? 'Expand' : 'Collapse'}
           style={{ height: 28, padding: '0 10px' }}
         >
-          {collapsed ? '»' : '«'}
+          {collapsed ? '>>' : '<<'}
         </button>
       </div>
 

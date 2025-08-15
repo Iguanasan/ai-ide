@@ -84,7 +84,7 @@ const CsvToJson: React.FC = () => {
 
   return (
     <section>
-      <h1 className="text-xl font-bold mb-2">CSV → JSON</h1>
+      <h1 className="text-xl font-bold mb-2">CSV to JSON</h1>
       <p className="text-sm text-gray-600 mb-4">
         Paste CSV (first row is header). Output updates live.
       </p>
