@@ -2,7 +2,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { getTool } from '../tools/registry';
-import ResizableDock from '../components/ResizableDock';
 
 const ToolHost: React.FC = () => {
   const { toolId = '' } = useParams();
@@ -11,7 +10,6 @@ const ToolHost: React.FC = () => {
   const [Comp, setComp] = React.useState<React.ComponentType | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
-  // Manual dynamic import ensures a fresh mount on every tool change
   React.useEffect(() => {
     let alive = true;
     setComp(null);
@@ -44,14 +42,11 @@ const ToolHost: React.FC = () => {
   if (err) return <div className="text-sm text-red-600">{err}</div>;
   if (!Comp) return <div className="p-2">Loading...</div>;
 
+  // Full-bleed layout for Prompt Analyzer
   const content = <Comp key={toolId} />;
-
-  // Only dock the Prompt Analyzer; other tools render normally
-  return toolId === 'prompt-analyzer' ? (
-    <ResizableDock defaultWidth={1000} defaultHeight={520}>{content}</ResizableDock>
-  ) : (
-    content
-  );
+  return toolId === 'prompt-analyzer'
+    ? <div className="full-bleed">{content}</div>
+    : content;
 };
 
 export default ToolHost;

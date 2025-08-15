@@ -1,4 +1,3 @@
-// src/tools/registry.ts
 import React from 'react';
 
 export type ToolMeta = {
@@ -8,10 +7,10 @@ export type ToolMeta = {
 };
 
 const registry: ToolMeta[] = [
-  { id: 'agent-manager', name: 'Agent Manager', load: () => import('./agent-manager') },
-  { id: 'prompt-analyzer', name: 'Prompt Analyzer', load: () => import('./prompt-analyzer') },
-  { id: 'csv-to-json',     name: 'CSV to JSON',      load: () => import('./csv-to-json') },
-  { id: 'markdown-notes',  name: 'Markdown Notes',  load: () => import('./markdown-notes') },
+  { id: 'prompt-analyzer',  name: 'Prompt Analyzer',     load: () => import('./prompt-analyzer') },
+  { id: 'conversation-analysis', name: 'Conversation Analysis', load: () => import('./conversation-analysis') },
+  { id: 'agent-manager',    name: 'Agent Manager',       load: () => import('./agent-manager') },
+  { id: 'csv-to-json',      name: 'CSV to JSON',         load: () => import('./csv-to-json') },
 ];
 
 export const useTools = () => registry;
