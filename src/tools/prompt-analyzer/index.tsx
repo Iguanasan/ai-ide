@@ -11,41 +11,73 @@ type SectionData = { content: string; evaluation: string };
 type Sections = Record<SectionKey, SectionData>;
 
 export const SYSTEM_PROMPT = `
-You are an evaluator of conversations between a human and a language model (LLM).
-Your task is to analyze the entire dialogue and provide structured recommendations
-that will help the human improve future interactions with LLMs to maximize the quality
-of results.
-
+You are an evaluator of prompts.
+Your task is to analyze the effectiveness of a given user prompt and produce structured feedback.
 Follow these steps:
 
-Step 1. Conversation Summary
-Provide a concise summary of the conversation's purpose, flow, and key themes.
+Step 1. Parse Prompt into Sections
+Extract content into these categories along with an evaluation for each (use "" if absent):
+- Role Assignment
+- Task Description
+- Context/Background
+- Examples
+- Specific Instructions
+- Constraints & Guidelines
+- Desired Output Format
+- Audience/Intent
+- Final Query/Trigger
 
-Step 2. Strengths
-Identify what the human did well in the conversation (e.g., clarity, context, step-by-step instructions).
+Step 2. Style Analysis (Three Sliders)
+Evaluate the formatting choice of the prompt along three axes:
+- Structure Strictness (Unstructured to Fully Structured)
+- Human Readability (Machine-oriented to Human-oriented)
+- Hierarchy Depth (Flat to Deeply Nested)
+Identify the corresponding format region (Plain text / Markdown / JSON / YAML / Hybrid) and comment on fitness for purpose.
 
-Step 3. Weaknesses
-Identify issues that reduced effectiveness (e.g., vague queries, missing context, unclear output expectations, lack of constraints).
+Step 3. Identify Gaps or Weaknesses
+- List missing or weak sections.
+- Highlight redundancies or overlaps.
 
-Step 4. Missed Opportunities
-Highlight what could have been included or asked to get better results (e.g., providing examples, specifying format, giving role guidance).
+Step 4. Suggest Improvements
+Provide 2 or 3 targeted questions that would help strengthen or complete the prompt.
 
-Step 5. Actionable Recommendations
-List 3 to 5 concrete suggestions the human could apply in future chats to improve prompt effectiveness, clarity, and outcome alignment.
+Step 5. Score the Prompt
+Assign a total effectiveness score (0 to 100) using this rubric:
+- Completeness of Sections (30 pts)
+- Clarity & Unambiguity (20 pts)
+- Alignment of Audience/Intent (15 pts)
+- Use of Examples (10 pts)
+- Output Format Appropriateness (15 pts)
+- Style Fit via Three Sliders (10 pts)
 
 Step 6. Output in JSON
 Always return results in the following JSON structure:
 
 {
-  "summary": "...",
-  "strengths": ["point1", "point2"],
-  "weaknesses": ["point1", "point2"],
-  "missed_opportunities": ["point1", "point2"],
-  "recommendations": [
-    "recommendation1",
-    "recommendation2",
-    "recommendation3"
-  ]
+  "sections": {
+    "role": "...","role_evaluation": "...",
+    "task": "...","task_evaluation": "...",
+    "context": "...","context_evaluation": "...",
+    "examples": "...","examples_evaluation": "...",
+    "instructions": "...","instructions_evalauation": "...",
+    "constraints": "...","constraints_evalauation": "...",
+    "output_format": "...","output_evalauation": "...",
+    "audience": "...","audience_evalauation": "...",
+    "final_query": "..."final_query_evalauation": "...",
+  },
+  "style": {
+    "structure_strictness": "low/medium/high",
+    "human_readability": "low/medium/high",
+    "hierarchy_depth": "low/medium/high",
+    "format_region": "Plain text / Markdown / JSON / YAML / Hybrid",
+    "fit_comment": "..."
+  },
+  "missing": ["section1", "section2"],
+  "suggestions": [
+    "question1",
+    "question2"
+  ],
+  "score": 0-100
 }
 `;
 
@@ -126,20 +158,21 @@ const PromptAnalyzer: React.FC = () => {
         setLog(prev => [...prev, `API Response: ${result}`]);
       }
       const parsed: any = JSON.parse(result);
+      const sectionsData = parsed.sections || {};
       const newSections: Sections = {
-        role: { content: parsed.sections.role || '', evaluation: parsed.sections['role evaluation'] || '' },
-        task: { content: parsed.sections.task || '', evaluation: parsed.sections['task evaluation'] || '' },
-        context: { content: parsed.sections.context || '', evaluation: parsed.sections['context evaluation'] || '' },
-        examples: { content: parsed.sections.examples || '', evaluation: parsed.sections['examples evaluation'] || '' },
-        instructions: { content: parsed.sections.instructions || '', evaluation: parsed.sections['instructions evaluation'] || '' },
-        constraints: { content: parsed.sections.constraints || '', evaluation: parsed.sections['constraints evaluation'] || '' },
-        outputFormat: { content: parsed.sections.output_format || '', evaluation: parsed.sections['output_format evaluation'] || '' },
-        query: { content: parsed.sections.final_query || '', evaluation: parsed.sections['final_query evaluation'] || '' },
+        role: { content: sectionsData.role || '', evaluation: sectionsData.role_evaluation || '' },
+        task: { content: sectionsData.task || '', evaluation: sectionsData.task_evaluation || '' },
+        context: { content: sectionsData.context || '', evaluation: sectionsData.context_evaluation || '' },
+        examples: { content: sectionsData.examples || '', evaluation: sectionsData.examples_evaluation || '' },
+        instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '' },
+        constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '' },
+        outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '' },
+        query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '' },
       };
       setSections(newSections);
-      setMissing(parsed.missing);
-      setSuggestions(parsed.suggestions);
-      setScore(parsed.score);
+      setMissing(Array.isArray(parsed.missing) ? parsed.missing : []);
+      setSuggestions(Array.isArray(parsed.suggestions) ? parsed.suggestions : []);
+      setScore(typeof parsed.score === 'number' ? parsed.score : 0);
       setPreview(generatePreview(newSections));
       setShowOriginal(false);
       setIsFirstAnalysis(false);
@@ -171,20 +204,21 @@ const PromptAnalyzer: React.FC = () => {
         setLog(prev => [...prev, `API Response: ${result}`]);
       }
       const parsed: any = JSON.parse(result);
+      const sectionsData = parsed.sections || {};
       const newSections: Sections = {
-        role: { content: parsed.sections.role || '', evaluation: parsed.sections['role evaluation'] || '' },
-        task: { content: parsed.sections.task || '', evaluation: parsed.sections['task evaluation'] || '' },
-        context: { content: parsed.sections.context || '', evaluation: parsed.sections['context evaluation'] || '' },
-        examples: { content: parsed.sections.examples || '', evaluation: parsed.sections['examples evaluation'] || '' },
-        instructions: { content: parsed.sections.instructions || '', evaluation: parsed.sections['instructions evaluation'] || '' },
-        constraints: { content: parsed.sections.constraints || '', evaluation: parsed.sections['constraints evaluation'] || '' },
-        outputFormat: { content: parsed.sections.output_format || '', evaluation: parsed.sections['output_format evaluation'] || '' },
-        query: { content: parsed.sections.final_query || '', evaluation: parsed.sections['final_query evaluation'] || '' },
+        role: { content: sectionsData.role || '', evaluation: sectionsData.role_evaluation || '' },
+        task: { content: sectionsData.task || '', evaluation: sectionsData.task_evaluation || '' },
+        context: { content: sectionsData.context || '', evaluation: sectionsData.context_evaluation || '' },
+        examples: { content: sectionsData.examples || '', evaluation: sectionsData.examples_evaluation || '' },
+        instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '' },
+        constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '' },
+        outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '' },
+        query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '' },
       };
       setSections(newSections);
-      setMissing(parsed.missing);
-      setSuggestions(parsed.suggestions);
-      setScore(parsed.score);
+      setMissing(Array.isArray(parsed.missing) ? parsed.missing : []);
+      setSuggestions(Array.isArray(parsed.suggestions) ? parsed.suggestions : []);
+      setScore(typeof parsed.score === 'number' ? parsed.score : 0);
       setPreview(generatePreview(newSections));
     } catch (err) {
       setError('Re-analysis failed: ' + (err as Error).message);
@@ -312,8 +346,13 @@ const PromptAnalyzer: React.FC = () => {
                     value={value.content}
                     onChange={(e) => { updateSection(key as SectionKey, e.target.value); setHasChanges(true); }}
                   />
-                  {value.evaluation && <p className="text-[var(--text-secondary)] text-sm mt-1">{value.evaluation}</p>}
-                  {missing.includes(key) && <p className="text-[var(--error-red)] text-sm mt-1">Missing or weak—add details</p>}
+                  {value.evaluation && (
+                    <div className="mt-2 p-3 bg-gray-800 border-l-4 border-blue-500 rounded-r-md">
+                      <div className="flex items-start">
+                        <p className="text-white text-sm leading-relaxed font-medium"><blockquote>{value.evaluation}</blockquote></p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
