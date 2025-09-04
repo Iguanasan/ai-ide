@@ -37,12 +37,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const api = useMemo(
     () => ({
       signInWithPassword: async (email: string, password: string) => {
-        if (!emailDomainOk(email)) throw new Error('Authentication failed.');
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       },
       signUpWithPassword: async (email: string, password: string) => {
-        if (!emailDomainOk(email)) throw new Error('Authentication failed.');
+        if (!emailDomainOk(email)) throw new Error('Sign up is restricted to specific domains.');
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
       },

@@ -34,8 +34,8 @@ const Login: React.FC = () => {
         <div className="rounded-2xl shadow-lg border border-gray-200 bg-white overflow-hidden">
           <div className="px-6 py-7">
             <div className="text-center mb-6">
-              <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Mariner AI-IDE</h1>
-              <p className="text-gray-500 text-sm">An IDE for AI Projects</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-gray-900">AI Toolbox</h1>
+              <p className="text-gray-500 text-sm">Tools for the AI Enthusiast</p>
             </div>
 
             <form onSubmit={onSubmit} className="space-y-4">
@@ -47,7 +47,7 @@ const Login: React.FC = () => {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@MarinerInnovations.com"
+                  placeholder={isLogin ? "your.name@business.com" : "email@yourdomain.com"}
                   required
                 />
               </div>
