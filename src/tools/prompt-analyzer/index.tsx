@@ -1,304 +1,407 @@
 import React, { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { supabase } from '../../lib/supabase';
+import { getRepo } from '../../data';
 import { useAuth } from '../../providers/AuthProvider';
+import { chatWithSystem, type ChatMessage } from '../../lib/system-llm';
 
-const VERSION = '0.2.0'; // bumped
+// Set to true during testing to enable debug logging
+const DEBUG_MODE = false;
 
-type Provider = 'ollama' | 'grok' | 'chatgpt';
+type SectionKey = 'role' | 'task' | 'context' | 'examples' | 'instructions' | 'constraints' | 'outputFormat' | 'query';
+type SectionData = { content: string; evaluation: string };
+type Sections = Record<SectionKey, SectionData>;
 
-interface Config {
-  provider: Provider;
-  endpoint: string;
-  apiKey?: string;
-  model?: string;
-  temperature?: number;
-  instructions: string;
+export const SYSTEM_PROMPT = `
+You are an evaluator of conversations between a human and a language model (LLM).
+Your task is to analyze the entire dialogue and provide structured recommendations
+that will help the human improve future interactions with LLMs to maximize the quality
+of results.
+
+Follow these steps:
+
+Step 1. Conversation Summary
+Provide a concise summary of the conversation's purpose, flow, and key themes.
+
+Step 2. Strengths
+Identify what the human did well in the conversation (e.g., clarity, context, step-by-step instructions).
+
+Step 3. Weaknesses
+Identify issues that reduced effectiveness (e.g., vague queries, missing context, unclear output expectations, lack of constraints).
+
+Step 4. Missed Opportunities
+Highlight what could have been included or asked to get better results (e.g., providing examples, specifying format, giving role guidance).
+
+Step 5. Actionable Recommendations
+List 3 to 5 concrete suggestions the human could apply in future chats to improve prompt effectiveness, clarity, and outcome alignment.
+
+Step 6. Output in JSON
+Always return results in the following JSON structure:
+
+{
+  "summary": "...",
+  "strengths": ["point1", "point2"],
+  "weaknesses": ["point1", "point2"],
+  "missed_opportunities": ["point1", "point2"],
+  "recommendations": [
+    "recommendation1",
+    "recommendation2",
+    "recommendation3"
+  ]
 }
+`;
 
-type ProviderConfigs = Record<Provider, Config>;
-type ProviderModels = Record<Provider, string[]>;
-
-const defaultConfigs: ProviderConfigs = {
-  ollama: { provider: 'ollama', endpoint: 'http://localhost:11434/api/generate', model: 'llama3.1', temperature: 0.7, instructions: '' },
-  grok:   { provider: 'grok',   endpoint: 'https://api.x.ai/v1/chat/completions', apiKey: '', model: 'grok-1', temperature: 0.7, instructions: '' },
-  chatgpt:{ provider: 'chatgpt',endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: '', model: 'gpt-3.5-turbo', temperature: 0.7, instructions: '' },
-};
-
-const defaultModels: ProviderModels = {
-  ollama: ['llama3.1', 'deepseek-coder-6.7b'],
-  grok: ['grok-1'],
-  chatgpt: ['gpt-3.5-turbo', 'gpt-4'],
-};
-
-const TOOL_ID = 'prompt-analyzer';
-
-// --- tiny repo helpers bound to tool_settings ---
-async function getSetting<T>(key: string): Promise<T | null> {
-  const { data, error } = await supabase
-    .from('tool_settings')
-    .select('value')
-    .eq('tool', TOOL_ID)
-    .eq('key', key)
-    .maybeSingle();
-  if (error) throw error;
-  return (data?.value as T) ?? null;
-}
-async function setSetting<T>(key: string, value: T) {
-  const { error } = await supabase.from('tool_settings').upsert({ tool: TOOL_ID, key, value });
-  if (error) throw error;
-}
 
 const PromptAnalyzer: React.FC = () => {
   const { user } = useAuth();
-
-  const [providerConfigs, setProviderConfigs] = useState<ProviderConfigs>(defaultConfigs);
-  const [providerModels, setProviderModels] = useState<ProviderModels>(defaultModels);
-  const [activeProvider, setActiveProvider] = useState<Provider>('ollama');
-  const [prompt, setPrompt] = useState('');
-  const [parsed, setParsed] = useState<{ thinking?: string; response: string }>({ response: '' });
+  const [originalPrompt, setOriginalPrompt] = useState('');
+  const [showOriginal, setShowOriginal] = useState(true);
+  const [sections, setSections] = useState<Sections>({ role: { content: '', evaluation: '' }, task: { content: '', evaluation: '' }, context: { content: '', evaluation: '' }, examples: { content: '', evaluation: '' }, instructions: { content: '', evaluation: '' }, constraints: { content: '', evaluation: '' }, outputFormat: { content: '', evaluation: '' }, query: { content: '', evaluation: '' } });
+  const [missing, setMissing] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [score, setScore] = useState(0);
+  const [preview, setPreview] = useState('');
   const [loading, setLoading] = useState(false);
-  const [goal, setGoal] = useState('');
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [showGoalModal, setShowGoalModal] = useState(false);
-  const [newModel, setNewModel] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [savedPrompts, setSavedPrompts] = useState<{ id: string; title: string }[]>([]);
+  const [isFirstAnalysis, setIsFirstAnalysis] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
+  const [modalKey, setModalKey] = useState('');
+  const [hasChanges, setHasChanges] = useState(false);
+  const [loadModalOpen, setLoadModalOpen] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+  const repo = getRepo();
 
-  // load per-user settings from Supabase
   useEffect(() => {
-    let alive = true;
-    if (!user) return;
+    if (user) loadSavedPrompts();
+  }, [user]);
 
-    (async () => {
-      try {
-        const [cfg, mdl, g] = await Promise.all([
-          getSetting<ProviderConfigs>('configs'),
-          getSetting<ProviderModels>('models'),
-          getSetting<string>('goal'),
-        ]);
-        if (!alive) return;
-        if (cfg) setProviderConfigs(cfg);
-        if (mdl) setProviderModels(mdl);
-        if (g) setGoal(g);
-      } catch (e) {
-        console.warn('Settings load failed:', e);
-      }
-    })();
-
-    return () => { alive = false; };
-  }, [user?.id]);
-
-  const persistConfigs = async (updatedAll: ProviderConfigs) => {
-    setProviderConfigs(updatedAll);
-    try { await setSetting('configs', updatedAll); } catch (e) { console.warn(e); }
-  };
-  const persistModels = async (updatedAll: ProviderModels) => {
-    setProviderModels(updatedAll);
-    try { await setSetting('models', updatedAll); } catch (e) { console.warn(e); }
-  };
-  const persistGoal = async (g: string) => {
-    setGoal(g);
-    try { await setSetting('goal', g); } catch (e) { console.warn(e); }
+  const loadSavedPrompts = async () => {
+    const docs = await repo.listDocuments('prompt-analyzer');
+    setSavedPrompts(docs.slice(0, 5).map((d) => ({ id: d.id, title: d.title })));
   };
 
-  const saveConfig = (next: Partial<Config>) => {
-    const updated = { ...providerConfigs[activeProvider], ...next };
-    const updatedAll = { ...providerConfigs, [activeProvider]: updated };
-    void persistConfigs(updatedAll);
-  };
-
-  const addNewModel = () => {
-    if (!newModel.trim()) return;
-    const current = providerModels[activeProvider] || [];
-    if (!current.includes(newModel)) {
-      const updated = { ...providerModels, [activeProvider]: [...current, newModel] };
-      void persistModels(updated);
-      saveConfig({ model: newModel });
+  const loadPrompt = async (id: string) => {
+    resetAll();
+    const doc = await repo.getDocument(id);
+    if (doc) {
+      const data = JSON.parse(doc.content);
+      setOriginalPrompt(data.original || '');
+      const loadedSections = data.sections || {};
+      const newSections = {
+        role: { content: loadedSections.role || '', evaluation: '' },
+        task: { content: loadedSections.task || '', evaluation: '' },
+        context: { content: loadedSections.context || '', evaluation: '' },
+        examples: { content: loadedSections.examples || '', evaluation: '' },
+        instructions: { content: loadedSections.instructions || '', evaluation: '' },
+        constraints: { content: loadedSections.constraints || '', evaluation: '' },
+        outputFormat: { content: loadedSections.outputFormat || '', evaluation: '' },
+        query: { content: loadedSections.query || '', evaluation: '' },
+      };
+      setSections(newSections);
+      setMissing(data.missing || []);
+      setSuggestions(data.suggestions || []);
+      setScore(data.score || 0);
+      setPreview(generatePreview(newSections));
+      setShowOriginal(false);
+      setIsFirstAnalysis(false);
+      setHasChanges(false);
     }
-    setNewModel('');
   };
 
-  const deleteSelectedModel = () => {
-    const selectedModel = providerConfigs[activeProvider].model;
-    if (!selectedModel) return;
-    const current = providerModels[activeProvider] || [];
-    const updated = { ...providerModels, [activeProvider]: current.filter((m) => m !== selectedModel) };
-    void persistModels(updated);
-    const fallback = updated[activeProvider][0] ?? '';
-    saveConfig({ model: fallback });
-  };
-
-  const parseResponse = (res: string) => {
-    const thinkingRegex = /<thinking>([\s\S]*?)<\/thinking>/i;
-    const match = res.match(thinkingRegex);
-    if (match) {
-      const thinking = match[1].trim();
-      const response = res.replace(match[0], '').trim();
-      return { thinking, response };
+  const analyzePrompt = async () => {
+    if (!isFirstAnalysis) {
+      reAnalyze();
+      return;
     }
-    return { response: res };
-  };
-
-  const handleAnalyze = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!goal.trim()) { alert('Please set your goal in the Goal modal.'); return; }
-    if (!prompt.trim()) return;
-
     setLoading(true);
-    void persistGoal(goal);
-
-    const config = providerConfigs[activeProvider];
-
+    setError(null);
     try {
-      let result = '';
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (config.apiKey && activeProvider !== 'ollama') headers['Authorization'] = `Bearer ${config.apiKey}`;
-
-      const res = await fetch(config.endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(
-          activeProvider === 'ollama'
-            ? { model: config.model || 'llama3.1', temperature: config.temperature ?? 0.7, prompt: `${config.instructions}\n\nGoal: ${goal}\n\n${prompt}`, stream: false }
-            : {
-                model: config.model || 'llama3.1',
-                temperature: config.temperature ?? 0.7,
-                messages: [
-                  { role: 'system', content: config.instructions || '' },
-                  { role: 'user', content: `Goal: ${goal}\n\n${prompt}` },
-                ],
-              }
-        ),
-      });
-
-      const data = await res.json();
-      if (activeProvider === 'ollama') result = data.response || JSON.stringify(data);
-      else result = data.choices?.[0]?.message?.content || JSON.stringify(data);
-
-      setParsed(parseResponse(result));
+      const messages: ChatMessage[] = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: originalPrompt },
+      ];
+      const result = await chatWithSystem(messages);
+      if (DEBUG_MODE) {
+        setLog(prev => [...prev, `API Call: ${JSON.stringify(messages)}`]);
+        setLog(prev => [...prev, `API Response: ${result}`]);
+      }
+      const parsed: any = JSON.parse(result);
+      const newSections: Sections = {
+        role: { content: parsed.sections.role || '', evaluation: parsed.sections['role evaluation'] || '' },
+        task: { content: parsed.sections.task || '', evaluation: parsed.sections['task evaluation'] || '' },
+        context: { content: parsed.sections.context || '', evaluation: parsed.sections['context evaluation'] || '' },
+        examples: { content: parsed.sections.examples || '', evaluation: parsed.sections['examples evaluation'] || '' },
+        instructions: { content: parsed.sections.instructions || '', evaluation: parsed.sections['instructions evaluation'] || '' },
+        constraints: { content: parsed.sections.constraints || '', evaluation: parsed.sections['constraints evaluation'] || '' },
+        outputFormat: { content: parsed.sections.output_format || '', evaluation: parsed.sections['output_format evaluation'] || '' },
+        query: { content: parsed.sections.final_query || '', evaluation: parsed.sections['final_query evaluation'] || '' },
+      };
+      setSections(newSections);
+      setMissing(parsed.missing);
+      setSuggestions(parsed.suggestions);
+      setScore(parsed.score);
+      setPreview(generatePreview(newSections));
+      setShowOriginal(false);
+      setIsFirstAnalysis(false);
     } catch (err) {
-      setParsed({ response: `Error: ${(err as Error).message}` });
+      setError('Analysis failed: ' + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard!'));
+  const updateSection = (key: SectionKey, value: string) => {
+    const newSections = { ...sections, [key]: { ...sections[key], content: value } };
+    setSections(newSections);
+    setPreview(generatePreview(newSections));
+  };
 
-  const config = providerConfigs[activeProvider];
-  const models = providerModels[activeProvider] || [];
+  const reAnalyze = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const currentPrompt = preview;
+      const messages: ChatMessage[] = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: currentPrompt },
+      ];
+      const result = await chatWithSystem(messages);
+      if (DEBUG_MODE) {
+        setLog(prev => [...prev, `API Call: ${JSON.stringify(messages)}`]);
+        setLog(prev => [...prev, `API Response: ${result}`]);
+      }
+      const parsed: any = JSON.parse(result);
+      const newSections: Sections = {
+        role: { content: parsed.sections.role || '', evaluation: parsed.sections['role evaluation'] || '' },
+        task: { content: parsed.sections.task || '', evaluation: parsed.sections['task evaluation'] || '' },
+        context: { content: parsed.sections.context || '', evaluation: parsed.sections['context evaluation'] || '' },
+        examples: { content: parsed.sections.examples || '', evaluation: parsed.sections['examples evaluation'] || '' },
+        instructions: { content: parsed.sections.instructions || '', evaluation: parsed.sections['instructions evaluation'] || '' },
+        constraints: { content: parsed.sections.constraints || '', evaluation: parsed.sections['constraints evaluation'] || '' },
+        outputFormat: { content: parsed.sections.output_format || '', evaluation: parsed.sections['output_format evaluation'] || '' },
+        query: { content: parsed.sections.final_query || '', evaluation: parsed.sections['final_query evaluation'] || '' },
+      };
+      setSections(newSections);
+      setMissing(parsed.missing);
+      setSuggestions(parsed.suggestions);
+      setScore(parsed.score);
+      setPreview(generatePreview(newSections));
+    } catch (err) {
+      setError('Re-analysis failed: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const css = `
-    :root { --primary-color:#007ACC; --neutral-gray:#2D2D2D; --workspace-bg:#1E1E1E; --text-primary:#D4D4D4; --text-secondary:#858585; --border-gray:#3C3C3C; --hover-blue:#005A9E; --space-xs:4px; --space-sm:8px; --space-md:12px; --space-lg:16px; --space-xl:24px; }
-    [data-theme="light"] { --neutral-gray:#F0F0F0; --workspace-bg:#FFFFFF; --text-primary:#333; --text-secondary:#666; --border-gray:#DDD; --hover-blue:#E6F7FF; }
-    .app-container{height:100%;width:100%;display:flex;flex-direction:column;overflow:hidden;}
-    .header{background:var(--neutral-gray);display:flex;align-items:center;padding:var(--space-lg);border-bottom:1px solid var(--border-gray);flex-shrink:0;}
-    .header h1{font-size:20px;font-weight:600;margin:0 var(--space-lg) 0 0;}
-    .header select{margin-right:var(--space-sm);padding:var(--space-sm);border:1px solid var(--border-gray);border-radius:4px;background:var(--workspace-bg);color:var(--text-primary);font-size:14px;}
-    .main-content{flex:1;display:flex;overflow:hidden;}
-    .workspace{flex:1;background:var(--workspace-bg);padding:var(--space-lg);overflow:auto;display:flex;flex-direction:column;}
-    .workspace form{display:flex;flex-direction:column;gap:var(--space-sm);}
-    textarea{background:var(--workspace-bg);border:1px solid var(--border-gray);border-radius:4px;padding:var(--space-sm);color:var(--text-primary);font-size:14px;width:100%;resize:vertical;}
-    textarea:focus{outline:2px solid var(--primary-color);}
-    .response{background:var(--workspace-bg);border:1px solid var(--border-gray);border-radius:4px;padding:var(--space-md);overflow:auto;flex-grow:1;}
-    .box{border:1px solid var(--border-gray);border-radius:4px;padding:var(--space-md);background:var(--neutral-gray);margin-bottom:var(--space-lg);}
-    .box-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-sm);}
-    .btn{background:var(--primary-color);color:#fff;border:none;border-radius:4px;padding:var(--space-sm) var(--space-lg);font-size:14px;cursor:pointer;height:32px;}
-    .btn:hover{background:var(--hover-blue);}
-    .btn-secondary{background:transparent;border:1px solid var(--primary-color);color:var(--primary-color);}
-    .btn-small{padding:var(--space-xs) var(--space-sm);font-size:12px;height:auto;}
-    .absolute-version{position:absolute;bottom:var(--space-xs);right:var(--space-lg);font-size:12px;color:var(--text-secondary);}
-  `;
+  const generatePreview = (secs: Sections) => {
+    return `
+**Role Assignment:** ${secs.role.content}
+
+**Task Description:** ${secs.task.content}
+
+**Context/Background:** ${secs.context.content}
+
+**Examples:** ${secs.examples.content}
+
+**Specific Instructions:** ${secs.instructions.content}
+
+**Constraints and Guidelines:** ${secs.constraints.content}
+
+**Desired Output Format:** ${secs.outputFormat.content}
+
+**Final Query or Trigger:** ${secs.query.content}
+    `.trim();
+  };
+
+  const saveProgress = async () => {
+    if (!user) return;
+    try {
+      await repo.upsertDocument({
+        id: crypto.randomUUID(),
+        tool: 'prompt-analyzer',
+        title: originalPrompt.slice(0, 50) || 'Untitled',
+      content: JSON.stringify({ original: originalPrompt, sections: Object.fromEntries(Object.entries(sections).map(([k, v]) => [k, v.content])), missing, suggestions, score }),
+        owner_user_id: user.id,
+      });
+      loadSavedPrompts();
+      setHasChanges(false);
+    } catch (err) {
+      setError('Save failed');
+    }
+  };
+
+  const copyPreview = () => {
+    navigator.clipboard.writeText(preview);
+  };
+
+  const resetAll = () => {
+    setOriginalPrompt('');
+    setSections({ role: { content: '', evaluation: '' }, task: { content: '', evaluation: '' }, context: { content: '', evaluation: '' }, examples: { content: '', evaluation: '' }, instructions: { content: '', evaluation: '' }, constraints: { content: '', evaluation: '' }, outputFormat: { content: '', evaluation: '' }, query: { content: '', evaluation: '' } });
+    setMissing([]);
+    setSuggestions([]);
+    setScore(0);
+    setPreview('');
+    setShowOriginal(true);
+    setIsFirstAnalysis(true);
+    setHasChanges(false);
+    setLog([]);
+  };
+
+  const deletePrompt = async (id: string) => {
+    if (confirm('Are you sure you want to delete this saved prompt?')) {
+      await repo.deleteDocument(id);
+      loadSavedPrompts();
+    }
+  };
 
   return (
-    <>
-      <style>{css}</style>
-      <div className="app-container">
-        <header className="header">
-          <h1>Prompt Analyzer</h1>
-          <select value={activeProvider} onChange={(e) => setActiveProvider(e.target.value as Provider)}>
-            {(['ollama','grok','chatgpt'] as Provider[]).map(p => <option key={p} value={p}>{p[0].toUpperCase()+p.slice(1)}</option>)}
-          </select>
-          <button className="btn btn-secondary" onClick={() => setShowConfigModal(true)}>Config</button>
-          <button className="btn btn-secondary" onClick={() => setShowGoalModal(true)}>Set Goal</button>
-        </header>
+    <div className="full-bleed p-[var(--space-lg)]">
+      <div style={{ position: 'fixed', top: '60px', right: '20px', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <button className="ds-btn ds-btn-ghost" onClick={() => { if (!hasChanges || confirm('Are you sure you want to start over? This will clear all current work.')) resetAll(); }}>
+          Start Over
+        </button>
+        <button className="ds-btn" onClick={saveProgress} disabled={loading || !user}>Save Prompt</button>
+        <button className="ds-btn ds-btn-secondary" onClick={() => setLoadModalOpen(true)}>Load Prompt</button>
+        {DEBUG_MODE && <button className="ds-btn ds-btn-secondary" onClick={() => navigator.clipboard.writeText(log.join('\n'))}>Copy Log</button>}
+      </div>
 
-        <div className="main-content">
-          <main className="workspace">
-            <form onSubmit={handleAnalyze}>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Enter your prompt to analyze..."
-                style={{ height: '150px' }}
-              />
-              <button type="submit" className="btn" disabled={loading}>
-                {loading ? 'Analyzing...' : 'Analyze'}
-              </button>
-            </form>
-
-            {(parsed.thinking || parsed.response) && (
-              <div className="response" style={{ marginTop: 'var(--space-lg)' }}>
-                {parsed.thinking && (
-                  <div className="box">
-                    <div className="box-header">
-                      <h3>Thinking</h3>
-                      <button className="btn btn-secondary btn-small" onClick={() => copyToClipboard(parsed.thinking!)}>Copy</button>
-                    </div>
-                    <ReactMarkdown>{parsed.thinking}</ReactMarkdown>
-                  </div>
-                )}
-                {parsed.response && (
-                  <div className="box">
-                    <div className="box-header">
-                      <h3>Response</h3>
-                      <button className="btn btn-secondary btn-small" onClick={() => copyToClipboard(parsed.response)}>Copy</button>
-                    </div>
-                    <ReactMarkdown>{parsed.response}</ReactMarkdown>
-                  </div>
-                )}
-              </div>
-            )}
-          </main>
+      <div className="mb-[var(--space-md)]">
+        <div
+          className="cursor-pointer p-[var(--space-sm)] border border-[var(--border-gray)] rounded bg-[var(--neutral-gray)]"
+          onClick={() => setShowOriginal(!showOriginal)}
+        >
+          <span>Original Prompt {showOriginal ? '(Collapse)' : '(Click to Expand)'}</span>
         </div>
-
-        <div className="absolute-version">Version {VERSION}</div>
-
-        {showConfigModal && (
-          <div className="modal" onClick={() => setShowConfigModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">Config for {activeProvider.toUpperCase()}</div>
-              <input type="text" placeholder="Endpoint URL" value={config.endpoint || ''} onChange={(e) => saveConfig({ endpoint: e.target.value })} />
-              {activeProvider !== 'ollama' && (
-                <input type="text" placeholder="API Key" value={config.apiKey || ''} onChange={(e) => saveConfig({ apiKey: e.target.value })} />
-              )}
-              <select value={config.model || ''} onChange={(e) => saveConfig({ model: e.target.value })}>
-                <option value="">Select Model</option>
-                {models.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <div className="add-model">
-                <input type="text" placeholder="New Model Name" value={newModel} onChange={(e) => setNewModel(e.target.value)} />
-                <button className="btn btn-secondary" onClick={addNewModel}>Add</button>
-              </div>
-              <button className="btn btn-secondary" onClick={deleteSelectedModel} disabled={!config.model}>Delete Selected Model</button>
-              <input type="number" step="0.1" min="0" max="1" placeholder="Temperature" value={config.temperature} onChange={(e) => saveConfig({ temperature: parseFloat(e.target.value) })} />
-              <textarea placeholder="Analyze Instructions" value={config.instructions || ''} onChange={(e) => saveConfig({ instructions: e.target.value })} style={{ height: '100px' }} />
-              <button className="btn btn-secondary" onClick={() => setShowConfigModal(false)}>Close</button>
-            </div>
+        {showOriginal && (
+          <div style={{ overflow: 'hidden' }}>
+            <textarea
+              className="w-full p-[var(--space-sm)] border border-[var(--border-gray)] rounded mt-1 bg-[var(--neutral-gray)] text-[var(--text-primary)]"
+              style={{ wordWrap: 'break-word', maxWidth: '100%', overflowWrap: 'break-word', overflow: 'auto', height: 'calc(100vh - 200px)' }}
+              value={originalPrompt}
+              onChange={(e) => { setOriginalPrompt(e.target.value); setHasChanges(true); }}
+              placeholder="Paste your prompt here..."
+            />
+            <button className="ds-btn ds-btn-secondary mt-1" onClick={() => { setModalContent(originalPrompt); setModalKey('original'); setModalOpen(true); }}>
+              ⛶
+            </button>
           </div>
         )}
-
-        {showGoalModal && (
-          <div className="modal" onClick={() => setShowGoalModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">Set Your Goal</div>
-              <textarea placeholder="What is your goal for this prompt?" value={goal} onChange={(e) => persistGoal(e.target.value)} style={{ height: '100px' }} />
-              <button className="btn" onClick={() => setShowGoalModal(false)}>Confirm</button>
-              <button className="btn btn-secondary" onClick={() => setShowGoalModal(false)}>Cancel</button>
-            </div>
-          </div>
+        {originalPrompt && (
+          <button className="ds-btn mt-2" onClick={analyzePrompt} disabled={loading}>
+            {loading ? (isFirstAnalysis ? 'Analyzing...' : 'Re-analyzing...') : (isFirstAnalysis ? 'Analyze' : 'Re-analyze')}
+          </button>
         )}
       </div>
-    </>
+      {error && <div className="text-[var(--error-red)] mb-[var(--space-sm)]">{error}</div>}
+      <div style={{ display: 'flex', gap: '20px' }}>
+        <div style={{ flex: 1, width: '50%' }}>
+          {!showOriginal && Object.keys(sections).length > 0 && (
+            <div className="mb-[var(--space-md)]">
+              <h3 className="text-xl font-bold mb-[var(--space-sm)]">Sections</h3>
+              {Object.entries(sections).map(([key, value]) => (
+                <div key={key} className={`mb-[var(--space-sm)] border ${missing.includes(key) ? 'border-[var(--error-red)]' : 'border-[var(--border-gray)]'} rounded p-[var(--space-sm)]`} style={{ overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
+                    <button className="ds-btn ds-btn-secondary" onClick={() => { setModalContent(value.content); setModalKey(key); setModalOpen(true); }}>
+                      ⛶
+                    </button>
+                  </div>
+                  <textarea
+                    className="w-full h-24 p-[var(--space-sm)] border border-[var(--border-gray)] rounded bg-[var(--neutral-gray)] text-[var(--text-primary)]"
+                    style={{ wordWrap: 'break-word', maxWidth: '100%', overflowWrap: 'break-word', overflow: 'hidden' }}
+                    value={value.content}
+                    onChange={(e) => { updateSection(key as SectionKey, e.target.value); setHasChanges(true); }}
+                  />
+                  {value.evaluation && <p className="text-[var(--text-secondary)] text-sm mt-1">{value.evaluation}</p>}
+                  {missing.includes(key) && <p className="text-[var(--error-red)] text-sm mt-1">Missing or weak—add details</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1, width: '50%' }}>
+          {!showOriginal && Object.keys(sections).length > 0 && (
+            <>
+              {suggestions.length > 0 && (
+                <div className="mb-[var(--space-md)]">
+                  <h3 className="text-xl font-bold mb-[var(--space-sm)]">Suggestions</h3>
+                  {suggestions.map((sug, i) => (
+                    <div key={i} className="mb-[var(--space-sm)]" style={{ overflow: 'hidden' }}>
+                      <p className="text-sm">{sug}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mb-[var(--space-md)]">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 className="text-lg font-semibold">Preview Prompt</h3>
+                  <button className="ds-btn ds-btn-secondary" onClick={copyPreview}>📋</button>
+                </div>
+                <pre className="ds-pre" style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>{preview}</pre>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {!showOriginal && Object.keys(sections).length > 0 && (
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: 'white', color: score >= 80 ? 'var(--success-green)' : score >= 50 ? 'var(--warning-yellow)' : 'var(--error-red)', padding: '15px', borderRadius: '5px', zIndex: 1000, fontSize: '18px' }}>
+          <strong>Prompt Strength: {score}/100</strong>
+        </div>
+      )}
+      {loadModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 2500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: '20px', borderRadius: '5px', width: '50%', maxHeight: '80%', overflow: 'auto' }}>
+            <h3 className="text-lg font-semibold mb-[var(--space-sm)]">Load Saved Prompts</h3>
+            {savedPrompts.map((p) => (
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <button className="ds-btn ds-btn-secondary" onClick={() => { loadPrompt(p.id); setLoadModalOpen(false); }}>
+                  {p.title}
+                </button>
+                <button className="ds-btn ds-btn-ghost" onClick={() => deletePrompt(p.id)}>
+                  🗑️
+                </button>
+              </div>
+            ))}
+            <button onClick={() => setLoadModalOpen(false)} className="ds-btn">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {loading && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: '20px', borderRadius: '5px', textAlign: 'center' }}>
+            <p>Analyzing Your Prompt...</p>
+            <div style={{ border: '4px solid #f3f3f3', borderTop: '4px solid #3498db', borderRadius: '50%', width: '40px', height: '40px', margin: '20px auto' }}></div>
+          </div>
+        </div>
+      )}
+      {modalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: '20px', borderRadius: '5px', width: '80%', height: '80%', display: 'flex', flexDirection: 'column' }}>
+            <textarea
+              className="flex-1 p-[var(--space-sm)] border border-[var(--border-gray)] rounded bg-[var(--neutral-gray)] text-[var(--text-primary)]"
+              style={{ wordWrap: 'break-word', maxWidth: '100%', overflowWrap: 'break-word', overflow: 'auto' }}
+              value={modalContent}
+              onChange={(e) => setModalContent(e.target.value)}
+            />
+            <button
+              className="ds-btn mt-2"
+              onClick={() => {
+                if (modalKey === 'original') {
+                  setOriginalPrompt(modalContent);
+                } else {
+                  updateSection(modalKey as SectionKey, modalContent);
+                }
+                setModalOpen(false);
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

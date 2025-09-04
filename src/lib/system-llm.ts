@@ -18,7 +18,7 @@ export async function chatWithSystem(messages: ChatMessage[], opts: ChatOptions 
     (opts.model as string | undefined) ??
     (import.meta.env.VITE_XAI_MODEL as string | undefined) ??
     (import.meta.env.VITE_GROK_MODEL as string | undefined) ??
-    'grok-4';
+    'grok-3-mini';
 
   const temperature = typeof opts.temperature === 'number' ? opts.temperature : 0.3;
 

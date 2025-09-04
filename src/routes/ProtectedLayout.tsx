@@ -18,7 +18,7 @@ const ProtectedLayout: React.FC = () => {
         <SidePanel />
         {/* make the workspace a positioned parent for the dock */}
         <main className="ds-workspace relative">
-          <div className="ds-workspace-inner">
+          <div className="ds-workspace-inner ninety-bleed">
             <Outlet />
           </div>
         </main>

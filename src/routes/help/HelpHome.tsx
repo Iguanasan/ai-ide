@@ -28,25 +28,7 @@ const HelpHome: React.FC = () => (
       <ul className="list-disc ml-5 space-y-1">
         <li><Link to="/help/tools/prompt-analyzer" className={linkCls}>Prompt Analyzer</Link></li>
         <li><Link to="/help/tools/conversation-analysis" className={linkCls}>Conversation Analysis</Link></li>
-        <li><Link to="/help/tools/agent-manager" className={linkCls}>Agent Manager</Link></li>
-        <li><Link to="/help/tools/csv-to-json" className={linkCls}>CSV to JSON</Link></li>
       </ul>
-    </section>
-
-    <section>
-      <h2 className="text-lg font-semibold mb-2">Troubleshooting</h2>
-      <details className="mb-2">
-        <summary className="cursor-pointer text-[var(--text-primary)]">I can’t log in</summary>
-        <div className="mt-2 text-sm text-[var(--text-primary)]">
-          Ensure you’re using your company email and correct password. If the issue persists, sign out and try again.
-        </div>
-      </details>
-      <details>
-        <summary className="cursor-pointer text-[var(--text-primary)]">My data isn’t saving</summary>
-        <div className="mt-2 text-sm text-[var(--text-primary)]">
-          Check network connectivity. If you switched accounts, sign out and back in.
-        </div>
-      </details>
     </section>
 
     <div className="mt-8">

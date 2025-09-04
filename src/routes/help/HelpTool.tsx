@@ -8,17 +8,11 @@ const HELP: Record<string, { title: string; body: React.ReactNode }> = {
     title: 'Prompt Analyzer',
     body: (
       <ul className="list-disc ml-5 space-y-1">
-        <li>Set your goal, paste a prompt, and click Analyze.</li>
-        <li>Use Config to choose provider/model and add your configuration information for your models.</li>
+        <li>Paste in the prompt you want analyzed and press the [Analyze] button.</li>
+        <li>The system will analyze the prompt and provide a screen where you can update various sections to build new prompt that will achieve better results.</li>
+        <li>After updating the various sections based on their specific critique or one of the provided suggestions, re-analyze to see if you've improved your score.</li>
+        <li>You can use the Save and Load buttons to save your work and come back to it later.</li>
       </ul>
-    ),
-  },
-  'agent-manager': {
-    title: 'Agent Manager',
-    body: (
-      <p>
-        This tool is used to add agents and create crews. It's prep for attempting to integrate CrewAI. More to follow...
-      </p>
     ),
   },
   'conversation-analysis': {
@@ -30,18 +24,9 @@ const HELP: Record<string, { title: string; body: React.ReactNode }> = {
           paste it into the box and hit analyze.
         </p>
         <p>
-          The goal of this tool is to analyze your conversation to suggest ways of achieving better results.
+          The goal of this tool is to analyze your conversation to suggest ways of achieving better results in future conversations with the LLM.
         </p>
       </>
-    ),
-  },
-  'csv-to-json': {
-    title: 'CSV to JSON',
-    body: (
-      <ul className="list-disc ml-5 space-y-1">
-        <li>First row is treated as headers; JSON updates live.</li>
-        <li>Use Download to save the JSON file.</li>
-      </ul>
     ),
   },
 };

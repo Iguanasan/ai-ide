@@ -159,3 +159,4 @@ button, input, textarea, select { line-height: inherit; }
 
 /* ---- NEW: full-bleed for specific tools ---- */
 .full-bleed { max-width: none !important; margin: 0; padding: 0; }
+.ninety-bleed { max-width: 90% !important; margin: 0 auto; padding: var(--space-lg); }
