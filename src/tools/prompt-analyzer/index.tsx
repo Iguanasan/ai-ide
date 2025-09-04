@@ -7,7 +7,7 @@ import { chatWithSystem, type ChatMessage } from '../../lib/system-llm';
 const DEBUG_MODE = false;
 
 type SectionKey = 'role' | 'task' | 'context' | 'examples' | 'instructions' | 'constraints' | 'outputFormat' | 'query';
-type SectionData = { content: string; evaluation: string };
+type SectionData = { content: string; evaluation: string; score: number };
 type Sections = Record<SectionKey, SectionData>;
 
 export const SYSTEM_PROMPT = `
@@ -16,7 +16,7 @@ Your task is to analyze the effectiveness of a given user prompt and produce str
 Follow these steps:
 
 Step 1. Parse Prompt into Sections
-Extract content into these categories along with an evaluation for each (use "" if absent):
+Extract content into these categories along with an evaluation and score (0-100) for each (use "" for content and 0 for score if absent):
 - Role Assignment
 - Task Description
 - Context/Background
@@ -55,15 +55,15 @@ Always return results in the following JSON structure:
 
 {
   "sections": {
-    "role": "...","role_evaluation": "...",
-    "task": "...","task_evaluation": "...",
-    "context": "...","context_evaluation": "...",
-    "examples": "...","examples_evaluation": "...",
-    "instructions": "...","instructions_evalauation": "...",
-    "constraints": "...","constraints_evalauation": "...",
-    "output_format": "...","output_evalauation": "...",
-    "audience": "...","audience_evalauation": "...",
-    "final_query": "..."final_query_evalauation": "...",
+    "role": "...","role_evaluation": "...","role_score": 0-100,
+    "task": "...","task_evaluation": "...","task_score": 0-100,
+    "context": "...","context_evaluation": "...","context_score": 0-100,
+    "examples": "...","examples_evaluation": "...","examples_score": 0-100,
+    "instructions": "...","instructions_evaluation": "...","instructions_score": 0-100,
+    "constraints": "...","constraints_evaluation": "...","constraints_score": 0-100,
+    "output_format": "...","output_format_evaluation": "...","output_format_score": 0-100,
+    "audience": "...","audience_evaluation": "...","audience_score": 0-100,
+    "final_query": "...","final_query_evaluation": "...","final_query_score": 0-100,
   },
   "style": {
     "structure_strictness": "low/medium/high",
@@ -86,7 +86,7 @@ const PromptAnalyzer: React.FC = () => {
   const { user } = useAuth();
   const [originalPrompt, setOriginalPrompt] = useState('');
   const [showOriginal, setShowOriginal] = useState(true);
-  const [sections, setSections] = useState<Sections>({ role: { content: '', evaluation: '' }, task: { content: '', evaluation: '' }, context: { content: '', evaluation: '' }, examples: { content: '', evaluation: '' }, instructions: { content: '', evaluation: '' }, constraints: { content: '', evaluation: '' }, outputFormat: { content: '', evaluation: '' }, query: { content: '', evaluation: '' } });
+  const [sections, setSections] = useState<Sections>({ role: { content: '', evaluation: '', score: 0 }, task: { content: '', evaluation: '', score: 0 }, context: { content: '', evaluation: '', score: 0 }, examples: { content: '', evaluation: '', score: 0 }, instructions: { content: '', evaluation: '', score: 0 }, constraints: { content: '', evaluation: '', score: 0 }, outputFormat: { content: '', evaluation: '', score: 0 }, query: { content: '', evaluation: '', score: 0 } });
   const [missing, setMissing] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [score, setScore] = useState(0);
@@ -120,14 +120,14 @@ const PromptAnalyzer: React.FC = () => {
       setOriginalPrompt(data.original || '');
       const loadedSections = data.sections || {};
       const newSections = {
-        role: { content: loadedSections.role || '', evaluation: '' },
-        task: { content: loadedSections.task || '', evaluation: '' },
-        context: { content: loadedSections.context || '', evaluation: '' },
-        examples: { content: loadedSections.examples || '', evaluation: '' },
-        instructions: { content: loadedSections.instructions || '', evaluation: '' },
-        constraints: { content: loadedSections.constraints || '', evaluation: '' },
-        outputFormat: { content: loadedSections.outputFormat || '', evaluation: '' },
-        query: { content: loadedSections.query || '', evaluation: '' },
+        role: { content: loadedSections.role || '', evaluation: '', score: 0 },
+        task: { content: loadedSections.task || '', evaluation: '', score: 0 },
+        context: { content: loadedSections.context || '', evaluation: '', score: 0 },
+        examples: { content: loadedSections.examples || '', evaluation: '', score: 0 },
+        instructions: { content: loadedSections.instructions || '', evaluation: '', score: 0 },
+        constraints: { content: loadedSections.constraints || '', evaluation: '', score: 0 },
+        outputFormat: { content: loadedSections.outputFormat || '', evaluation: '', score: 0 },
+        query: { content: loadedSections.query || '', evaluation: '', score: 0 },
       };
       setSections(newSections);
       setMissing(data.missing || []);
@@ -160,14 +160,14 @@ const PromptAnalyzer: React.FC = () => {
       const parsed: any = JSON.parse(result);
       const sectionsData = parsed.sections || {};
       const newSections: Sections = {
-        role: { content: sectionsData.role || '', evaluation: sectionsData.role_evaluation || '' },
-        task: { content: sectionsData.task || '', evaluation: sectionsData.task_evaluation || '' },
-        context: { content: sectionsData.context || '', evaluation: sectionsData.context_evaluation || '' },
-        examples: { content: sectionsData.examples || '', evaluation: sectionsData.examples_evaluation || '' },
-        instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '' },
-        constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '' },
-        outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '' },
-        query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '' },
+        role: { content: sectionsData.role || '', evaluation: sectionsData.role_evaluation || '', score: typeof sectionsData.role_score === 'number' ? sectionsData.role_score : 0 },
+        task: { content: sectionsData.task || '', evaluation: sectionsData.task_evaluation || '', score: typeof sectionsData.task_score === 'number' ? sectionsData.task_score : 0 },
+        context: { content: sectionsData.context || '', evaluation: sectionsData.context_evaluation || '', score: typeof sectionsData.context_score === 'number' ? sectionsData.context_score : 0 },
+        examples: { content: sectionsData.examples || '', evaluation: sectionsData.examples_evaluation || '', score: typeof sectionsData.examples_score === 'number' ? sectionsData.examples_score : 0 },
+        instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '', score: typeof sectionsData.instructions_score === 'number' ? sectionsData.instructions_score : 0 },
+        constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '', score: typeof sectionsData.constraints_score === 'number' ? sectionsData.constraints_score : 0 },
+        outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '', score: typeof sectionsData.output_format_score === 'number' ? sectionsData.output_format_score : 0 },
+        query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '', score: typeof sectionsData.final_query_score === 'number' ? sectionsData.final_query_score : 0 },
       };
       setSections(newSections);
       setMissing(Array.isArray(parsed.missing) ? parsed.missing : []);
@@ -206,14 +206,14 @@ const PromptAnalyzer: React.FC = () => {
       const parsed: any = JSON.parse(result);
       const sectionsData = parsed.sections || {};
       const newSections: Sections = {
-        role: { content: sectionsData.role || '', evaluation: sectionsData.role_evaluation || '' },
-        task: { content: sectionsData.task || '', evaluation: sectionsData.task_evaluation || '' },
-        context: { content: sectionsData.context || '', evaluation: sectionsData.context_evaluation || '' },
-        examples: { content: sectionsData.examples || '', evaluation: sectionsData.examples_evaluation || '' },
-        instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '' },
-        constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '' },
-        outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '' },
-        query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '' },
+        role: { content: sectionsData.role || '', evaluation: sectionsData.role_evaluation || '', score: typeof sectionsData.role_score === 'number' ? sectionsData.role_score : 0 },
+        task: { content: sectionsData.task || '', evaluation: sectionsData.task_evaluation || '', score: typeof sectionsData.task_score === 'number' ? sectionsData.task_score : 0 },
+        context: { content: sectionsData.context || '', evaluation: sectionsData.context_evaluation || '', score: typeof sectionsData.context_score === 'number' ? sectionsData.context_score : 0 },
+        examples: { content: sectionsData.examples || '', evaluation: sectionsData.examples_evaluation || '', score: typeof sectionsData.examples_score === 'number' ? sectionsData.examples_score : 0 },
+        instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '', score: typeof sectionsData.instructions_score === 'number' ? sectionsData.instructions_score : 0 },
+        constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '', score: typeof sectionsData.constraints_score === 'number' ? sectionsData.constraints_score : 0 },
+        outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '', score: typeof sectionsData.output_format_score === 'number' ? sectionsData.output_format_score : 0 },
+        query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '', score: typeof sectionsData.final_query_score === 'number' ? sectionsData.final_query_score : 0 },
       };
       setSections(newSections);
       setMissing(Array.isArray(parsed.missing) ? parsed.missing : []);
@@ -270,7 +270,7 @@ const PromptAnalyzer: React.FC = () => {
 
   const resetAll = () => {
     setOriginalPrompt('');
-    setSections({ role: { content: '', evaluation: '' }, task: { content: '', evaluation: '' }, context: { content: '', evaluation: '' }, examples: { content: '', evaluation: '' }, instructions: { content: '', evaluation: '' }, constraints: { content: '', evaluation: '' }, outputFormat: { content: '', evaluation: '' }, query: { content: '', evaluation: '' } });
+    setSections({ role: { content: '', evaluation: '', score: 0 }, task: { content: '', evaluation: '', score: 0 }, context: { content: '', evaluation: '', score: 0 }, examples: { content: '', evaluation: '', score: 0 }, instructions: { content: '', evaluation: '', score: 0 }, constraints: { content: '', evaluation: '', score: 0 }, outputFormat: { content: '', evaluation: '', score: 0 }, query: { content: '', evaluation: '', score: 0 } });
     setMissing([]);
     setSuggestions([]);
     setScore(0);
@@ -279,6 +279,24 @@ const PromptAnalyzer: React.FC = () => {
     setIsFirstAnalysis(true);
     setHasChanges(false);
     setLog([]);
+  };
+
+  const getSectionScoreColor = (sectionScore: number, overallScore: number) => {
+    const difference = sectionScore - overallScore;
+    if (difference >= 10) return 'text-green-600'; // Much better than overall
+    if (difference >= 5) return 'text-green-500'; // Better than overall
+    if (difference >= -5) return 'text-yellow-600'; // Similar to overall
+    if (difference >= -10) return 'text-orange-600'; // Worse than overall
+    return 'text-red-600'; // Much worse than overall
+  };
+
+  const getSectionScoreBgColor = (sectionScore: number, overallScore: number) => {
+    const difference = sectionScore - overallScore;
+    if (difference >= 10) return 'bg-green-100'; // Much better than overall
+    if (difference >= 5) return 'bg-green-50'; // Better than overall
+    if (difference >= -5) return 'bg-yellow-50'; // Similar to overall
+    if (difference >= -10) return 'bg-orange-50'; // Worse than overall
+    return 'bg-red-50'; // Much worse than overall
   };
 
   const deletePrompt = async (id: string) => {
@@ -335,7 +353,14 @@ const PromptAnalyzer: React.FC = () => {
               {Object.entries(sections).map(([key, value]) => (
                 <div key={key} className={`mb-[var(--space-sm)] border ${missing.includes(key) ? 'border-[var(--error-red)]' : 'border-[var(--border-gray)]'} rounded p-[var(--space-sm)]`} style={{ overflow: 'hidden' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <label className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
+                    <label className="text-sm font-medium capitalize">
+                      {key.replace(/([A-Z])/g, ' $1').trim()}&nbsp;&nbsp;
+                      {value.score >= 0 && (
+                        <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${getSectionScoreBgColor(value.score, score)} ${getSectionScoreColor(value.score, score)}`}>
+                          ({value.score}%)
+                        </span>
+                      )}
+                    </label>
                     <button className="ds-btn ds-btn-secondary" onClick={() => { setModalContent(value.content); setModalKey(key); setModalOpen(true); }}>
                       ⛶
                     </button>
