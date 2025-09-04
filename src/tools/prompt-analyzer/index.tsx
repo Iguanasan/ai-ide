@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { getRepo } from '../../data';
 import { useAuth } from '../../providers/AuthProvider';
 import { chatWithSystem, type ChatMessage } from '../../lib/system-llm';
+import { useTheme } from '../../hooks/useTheme';
 
 // Set to true during testing to enable debug logging
 const DEBUG_MODE = false;
 
-type SectionKey = 'role' | 'task' | 'context' | 'examples' | 'instructions' | 'constraints' | 'outputFormat' | 'query';
+type SectionKey = 'role' | 'task' | 'context' | 'examples' | 'instructions' | 'constraints' | 'outputFormat' | 'audience' | 'query';
 type SectionData = { content: string; evaluation: string; score: number };
 type Sections = Record<SectionKey, SectionData>;
 
@@ -84,9 +85,10 @@ Always return results in the following JSON structure:
 
 const PromptAnalyzer: React.FC = () => {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [originalPrompt, setOriginalPrompt] = useState('');
   const [showOriginal, setShowOriginal] = useState(true);
-  const [sections, setSections] = useState<Sections>({ role: { content: '', evaluation: '', score: 0 }, task: { content: '', evaluation: '', score: 0 }, context: { content: '', evaluation: '', score: 0 }, examples: { content: '', evaluation: '', score: 0 }, instructions: { content: '', evaluation: '', score: 0 }, constraints: { content: '', evaluation: '', score: 0 }, outputFormat: { content: '', evaluation: '', score: 0 }, query: { content: '', evaluation: '', score: 0 } });
+  const [sections, setSections] = useState<Sections>({ role: { content: '', evaluation: '', score: 0 }, task: { content: '', evaluation: '', score: 0 }, context: { content: '', evaluation: '', score: 0 }, examples: { content: '', evaluation: '', score: 0 }, instructions: { content: '', evaluation: '', score: 0 }, constraints: { content: '', evaluation: '', score: 0 }, outputFormat: { content: '', evaluation: '', score: 0 }, audience: { content: '', evaluation: '', score: 0 }, query: { content: '', evaluation: '', score: 0 } });
   const [missing, setMissing] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [score, setScore] = useState(0);
@@ -120,14 +122,15 @@ const PromptAnalyzer: React.FC = () => {
       setOriginalPrompt(data.original || '');
       const loadedSections = data.sections || {};
       const newSections = {
-        role: { content: loadedSections.role || '', evaluation: '', score: 0 },
-        task: { content: loadedSections.task || '', evaluation: '', score: 0 },
-        context: { content: loadedSections.context || '', evaluation: '', score: 0 },
-        examples: { content: loadedSections.examples || '', evaluation: '', score: 0 },
-        instructions: { content: loadedSections.instructions || '', evaluation: '', score: 0 },
-        constraints: { content: loadedSections.constraints || '', evaluation: '', score: 0 },
-        outputFormat: { content: loadedSections.outputFormat || '', evaluation: '', score: 0 },
-        query: { content: loadedSections.query || '', evaluation: '', score: 0 },
+        role: { content: loadedSections.role?.content || '', evaluation: loadedSections.role?.evaluation || '', score: loadedSections.role?.score || 0 },
+        task: { content: loadedSections.task?.content || '', evaluation: loadedSections.task?.evaluation || '', score: loadedSections.task?.score || 0 },
+        context: { content: loadedSections.context?.content || '', evaluation: loadedSections.context?.evaluation || '', score: loadedSections.context?.score || 0 },
+        examples: { content: loadedSections.examples?.content || '', evaluation: loadedSections.examples?.evaluation || '', score: loadedSections.examples?.score || 0 },
+        instructions: { content: loadedSections.instructions?.content || '', evaluation: loadedSections.instructions?.evaluation || '', score: loadedSections.instructions?.score || 0 },
+        constraints: { content: loadedSections.constraints?.content || '', evaluation: loadedSections.constraints?.evaluation || '', score: loadedSections.constraints?.score || 0 },
+        outputFormat: { content: loadedSections.outputFormat?.content || '', evaluation: loadedSections.outputFormat?.evaluation || '', score: loadedSections.outputFormat?.score || 0 },
+        audience: { content: loadedSections.audience?.content || '', evaluation: loadedSections.audience?.evaluation || '', score: loadedSections.audience?.score || 0 },
+        query: { content: loadedSections.query?.content || '', evaluation: loadedSections.query?.evaluation || '', score: loadedSections.query?.score || 0 },
       };
       setSections(newSections);
       setMissing(data.missing || []);
@@ -167,6 +170,7 @@ const PromptAnalyzer: React.FC = () => {
         instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '', score: typeof sectionsData.instructions_score === 'number' ? sectionsData.instructions_score : 0 },
         constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '', score: typeof sectionsData.constraints_score === 'number' ? sectionsData.constraints_score : 0 },
         outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '', score: typeof sectionsData.output_format_score === 'number' ? sectionsData.output_format_score : 0 },
+        audience: { content: sectionsData.audience || '', evaluation: sectionsData.audience_evaluation || '', score: typeof sectionsData.audience_score === 'number' ? sectionsData.audience_score : 0 },
         query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '', score: typeof sectionsData.final_query_score === 'number' ? sectionsData.final_query_score : 0 },
       };
       setSections(newSections);
@@ -213,6 +217,7 @@ const PromptAnalyzer: React.FC = () => {
         instructions: { content: sectionsData.instructions || '', evaluation: sectionsData.instructions_evaluation || '', score: typeof sectionsData.instructions_score === 'number' ? sectionsData.instructions_score : 0 },
         constraints: { content: sectionsData.constraints || '', evaluation: sectionsData.constraints_evaluation || '', score: typeof sectionsData.constraints_score === 'number' ? sectionsData.constraints_score : 0 },
         outputFormat: { content: sectionsData.output_format || '', evaluation: sectionsData.output_format_evaluation || '', score: typeof sectionsData.output_format_score === 'number' ? sectionsData.output_format_score : 0 },
+        audience: { content: sectionsData.audience || '', evaluation: sectionsData.audience_evaluation || '', score: typeof sectionsData.audience_score === 'number' ? sectionsData.audience_score : 0 },
         query: { content: sectionsData.final_query || '', evaluation: sectionsData.final_query_evaluation || '', score: typeof sectionsData.final_query_score === 'number' ? sectionsData.final_query_score : 0 },
       };
       setSections(newSections);
@@ -243,6 +248,8 @@ const PromptAnalyzer: React.FC = () => {
 
 **Desired Output Format:** ${secs.outputFormat.content}
 
+**Audience/Intent:** ${secs.audience.content}
+
 **Final Query or Trigger:** ${secs.query.content}
     `.trim();
   };
@@ -254,7 +261,7 @@ const PromptAnalyzer: React.FC = () => {
         id: crypto.randomUUID(),
         tool: 'prompt-analyzer',
         title: originalPrompt.slice(0, 50) || 'Untitled',
-      content: JSON.stringify({ original: originalPrompt, sections: Object.fromEntries(Object.entries(sections).map(([k, v]) => [k, v.content])), missing, suggestions, score }),
+        content: JSON.stringify({ original: originalPrompt, sections: Object.fromEntries(Object.entries(sections).map(([k, v]) => [k as SectionKey, { content: v.content, evaluation: v.evaluation, score: v.score }])), missing, suggestions, score }),
         owner_user_id: user.id,
       });
       loadSavedPrompts();
@@ -270,7 +277,7 @@ const PromptAnalyzer: React.FC = () => {
 
   const resetAll = () => {
     setOriginalPrompt('');
-    setSections({ role: { content: '', evaluation: '', score: 0 }, task: { content: '', evaluation: '', score: 0 }, context: { content: '', evaluation: '', score: 0 }, examples: { content: '', evaluation: '', score: 0 }, instructions: { content: '', evaluation: '', score: 0 }, constraints: { content: '', evaluation: '', score: 0 }, outputFormat: { content: '', evaluation: '', score: 0 }, query: { content: '', evaluation: '', score: 0 } });
+    setSections({ role: { content: '', evaluation: '', score: 0 }, task: { content: '', evaluation: '', score: 0 }, context: { content: '', evaluation: '', score: 0 }, examples: { content: '', evaluation: '', score: 0 }, instructions: { content: '', evaluation: '', score: 0 }, constraints: { content: '', evaluation: '', score: 0 }, outputFormat: { content: '', evaluation: '', score: 0 }, audience: { content: '', evaluation: '', score: 0 }, query: { content: '', evaluation: '', score: 0 } });
     setMissing([]);
     setSuggestions([]);
     setScore(0);
@@ -281,22 +288,15 @@ const PromptAnalyzer: React.FC = () => {
     setLog([]);
   };
 
-  const getSectionScoreColor = (sectionScore: number, overallScore: number) => {
-    const difference = sectionScore - overallScore;
-    if (difference >= 10) return 'text-green-600'; // Much better than overall
-    if (difference >= 5) return 'text-green-500'; // Better than overall
-    if (difference >= -5) return 'text-yellow-600'; // Similar to overall
-    if (difference >= -10) return 'text-orange-600'; // Worse than overall
-    return 'text-red-600'; // Much worse than overall
-  };
-
-  const getSectionScoreBgColor = (sectionScore: number, overallScore: number) => {
-    const difference = sectionScore - overallScore;
-    if (difference >= 10) return 'bg-green-100'; // Much better than overall
-    if (difference >= 5) return 'bg-green-50'; // Better than overall
-    if (difference >= -5) return 'bg-yellow-50'; // Similar to overall
-    if (difference >= -10) return 'bg-orange-50'; // Worse than overall
-    return 'bg-red-50'; // Much worse than overall
+  // Return a single border color (hex) for a section vs overall score.
+  // We'll only apply a colored border; panel background will not change.
+  const getSectionBorderHex = (sectionScore: number, overallScore: number) => {
+    const diff = sectionScore - overallScore;
+    if (diff >= 10) return '#34d399'; // green
+    if (diff >= 5) return '#86efac'; // light green
+    if (diff >= -5) return '#facc15'; // yellow
+    if (diff >= -10) return '#fb923c'; // orange
+    return '#f87171'; // red
   };
 
   const deletePrompt = async (id: string) => {
@@ -350,36 +350,55 @@ const PromptAnalyzer: React.FC = () => {
           {!showOriginal && Object.keys(sections).length > 0 && (
             <div className="mb-[var(--space-md)]">
               <h3 className="text-xl font-bold mb-[var(--space-sm)]">Sections</h3>
-              {Object.entries(sections).map(([key, value]) => (
-                <div key={key} className={`mb-[var(--space-sm)] border ${missing.includes(key) ? 'border-[var(--error-red)]' : 'border-[var(--border-gray)]'} rounded p-[var(--space-sm)]`} style={{ overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <label className="text-sm font-medium capitalize">
-                      {key.replace(/([A-Z])/g, ' $1').trim()}&nbsp;&nbsp;
-                      {value.score >= 0 && (
-                        <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${getSectionScoreBgColor(value.score, score)} ${getSectionScoreColor(value.score, score)}`}>
-                          ({value.score}%)
-                        </span>
-                      )}
-                    </label>
-                    <button className="ds-btn ds-btn-secondary" onClick={() => { setModalContent(value.content); setModalKey(key); setModalOpen(true); }}>
-                      ⛶
-                    </button>
-                  </div>
-                  <textarea
-                    className="w-full h-24 p-[var(--space-sm)] border border-[var(--border-gray)] rounded bg-[var(--neutral-gray)] text-[var(--text-primary)]"
-                    style={{ wordWrap: 'break-word', maxWidth: '100%', overflowWrap: 'break-word', overflow: 'hidden' }}
-                    value={value.content}
-                    onChange={(e) => { updateSection(key as SectionKey, e.target.value); setHasChanges(true); }}
-                  />
-                  {value.evaluation && (
-                    <div className="mt-2 p-3 bg-gray-800 border-l-4 border-blue-500 rounded-r-md">
-                      <div className="flex items-start">
-                        <p className="text-white text-sm leading-relaxed font-medium"><blockquote>{value.evaluation}</blockquote></p>
-                      </div>
+              {Object.entries(sections).map(([key, value]) => {
+                const borderHex = getSectionBorderHex(value.score, score);
+                return (
+                  <div
+                    key={key}
+                    className={`mb-[var(--space-sm)] border rounded p-[var(--space-sm)]`}
+                    style={{ overflow: 'hidden', borderColor: missing.includes(key) ? 'var(--error-red)' : borderHex, borderWidth: '2px', borderStyle: 'solid' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label className="text-sm font-medium capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').trim()}&nbsp;&nbsp;
+                        {value.score >= 0 && (
+                          <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold`} style={{ border: `1px solid ${borderHex}` }}>
+                            ({value.score}%)
+                          </span>
+                        )}
+                      </label>
+                      <button
+                        className="ds-btn ds-btn-secondary"
+                        onClick={() => {
+                          setModalContent(value.content);
+                          setModalKey(key);
+                          setModalOpen(true);
+                        }}
+                      >
+                        ⛶
+                      </button>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <textarea
+                      className="w-full h-24 p-[var(--space-sm)] border border-[var(--border-gray)] rounded bg-[var(--neutral-gray)] text-[var(--text-primary)]"
+                      style={{ wordWrap: 'break-word', maxWidth: '100%', overflowWrap: 'break-word', overflow: 'hidden' }}
+                      value={value.content}
+                      onChange={(e) => {
+                        updateSection(key as SectionKey, e.target.value);
+                        setHasChanges(true);
+                      }}
+                    />
+                    {value.evaluation && (
+                      <div className="mt-2 p-3 bg-gray-800 border-l-4 border-blue-500 rounded-r-md">
+                        <div className="flex items-start">
+                          <p className="text-white text-sm leading-relaxed font-medium">
+                            <blockquote>{value.evaluation}</blockquote>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
